@@ -163,7 +163,7 @@ trainer.train()
 ######################
 
 if args.use_lora:
-    pass # TODO
+    pass # TODO: Figure out how to store LoRA weights aggregated
 
 else:
     metrics = gather_metrics(trainer)
@@ -171,5 +171,5 @@ else:
     with open("out/base_metric_results.json") as f:
         curr_results = json.load(f)
 
-    run_name = "-".join([str(i) for i in selected_classes])
+    run_name = "-".join([str(i) for i in sorted(selected_classes)])
     curr_results[run_name] = metrics
