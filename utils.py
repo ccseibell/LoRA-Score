@@ -8,7 +8,7 @@ def parse_args():
     # Dataset and preprocessing
     parser.add_argument(
         "--dataset",
-        choices=["mnist", "oxford-pet", "FGVC-Aircraft", "caltech-101", "food101", "flowers-102"],
+        choices=["mnist", "stanford-dogs", "oxford-pet", "FGVC-Aircraft", "caltech-101", "food101", "flowers-102"],
         required = True,
         help="Dataset to use: 'mnist' or 'oxford' (default: oxford)",
     )
@@ -50,13 +50,19 @@ def parse_args():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=8,
+        default=32,
+        help="Per-device batch size (default: 8)."
+    )
+    parser.add_argument(
+        "--eval_batch_size",
+        type=int,
+        default=50,
         help="Per-device batch size (default: 8)."
     )
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
-        default=2,
+        default=1,
         help="Gradient accumulation steps (default: 2)."
     )
     parser.add_argument(

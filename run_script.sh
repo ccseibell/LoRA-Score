@@ -1,7 +1,12 @@
 #!/bin/bash
 
+# Define the Python script to run
+PYTHON_SCRIPT="ViT_training.py"
+DATASET="oxford-pet"
+
 # Running script for all classes
-python script.py --dataset oxford-pet
+echo "Running all classes"
+python $PYTHON_SCRIPT --dataset $DATASET
 
 # Define the total number of classes in the dataset
 TOTAL_CLASSES=37
@@ -12,19 +17,16 @@ generate_random_classes() {
     shuf -i 0-$(($TOTAL_CLASSES - 1)) -n $num_classes | tr '\n' ',' | sed 's/,$//'
 }
 
-# Define the Python script to run
-PYTHON_SCRIPT="ViT_training.py"
-
 # Loop through the desired combinations
 for i in {1..10}; do
-    for num_classes in 2 5 10 20; do
+    for num_classes in 5 10 15 20 25; do
         # Generate random classes
         random_classes=$(generate_random_classes $num_classes)
         
         echo "Running for $num_classes random classes: $random_classes"
         
         # Run the Python script with the generated classes
-        python $PYTHON_SCRIPT --num_classes $num_classes --class_ids $random_classes
+        python $PYTHON_SCRIPT --dataset $DATASET --classes $random_classes
         
         # Add a small delay to avoid overlaps (optional)
         sleep 1

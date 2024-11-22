@@ -35,11 +35,19 @@ if args.dataset == "mnist":
     dataset = load_dataset("mnist")
     num_classes = 10
     label_column_name = 'label'
+    image_col_name = "image"
 
 elif args.dataset == "oxford-pet":
     dataset = load_dataset("visual-layer/oxford-iiit-pet-vl-enriched")
     num_classes = 37
     label_column_name = 'label_breed'
+    image_col_name = "image"
+
+elif args.dataset == "stanford-dogs":
+    dataset = load_dataset("amaye15/stanford-dogs")
+    num_classes = 120
+    label_column_name = 'label'
+    image_col_name = "pixel_values"
 
 else:
     raise ValueError("Currently not supported -> You can add them now")
@@ -87,8 +95,9 @@ transform = Compose([
 
 # Combined function to resize, convert to RGB, and then to tensor
 def preprocess_images(batch):
-    batch['pixel_values'] = [transform(image.convert("RGB")) for image in batch['image']]
-    del batch['image']
+    batch['pixel_values'] = [transform(image.convert("RGB")) for image in batch[image_col_name]]
+    if image_col_name!='pixel_values':
+        del batch[image_col_name]
     return batch
 
 # Apply resizing
@@ -130,20 +139,19 @@ def compute_metrics(eval_pred):
     predictions = logits.argmax(axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = "ViT_pet"
+run_name = "ViT"
 training_args = TrainingArguments(
-    output_dir=f"results/{run_name}", # TODO: Maybe I don't need this
+    output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
-    per_device_eval_batch_size=args.batch_size,
+    per_device_eval_batch_size=args.eval_batch_size,
     gradient_accumulation_steps=args.gradient_accumulation_steps,
     max_steps=args.max_steps,
-    logging_steps=20,
-    eval_steps=20,
-    save_steps=50,
+    logging_steps=10,
+    eval_steps=10,
+    save_steps=10,
     save_total_limit=1,
     evaluation_strategy="steps"
 )
-
 
 # Initialize Trainer
 trainer = Trainer(
@@ -156,7 +164,6 @@ trainer = Trainer(
 
 # Start training
 trainer.train()
-
 
 ######################
 ### Results Logger ###
@@ -172,4 +179,7 @@ else:
         curr_results = json.load(f)
 
     run_name = "-".join([str(i) for i in sorted(selected_classes)])
-    curr_results[run_name] = metrics
+    curr_results[args.dataset][run_name] = metrics
+
+    with open("out/base_metric_results.json", "w") as f:
+        json.dump(curr_results, f)
