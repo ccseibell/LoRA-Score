@@ -2,7 +2,7 @@
 
 # Define the Python script to run
 PYTHON_SCRIPT="ViT_training.py"
-DATASET="oxford-pet"
+DATASET="stanford-dogs"
 
 # Running script for all classes
 echo "Running all classes"

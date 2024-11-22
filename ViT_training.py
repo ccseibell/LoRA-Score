@@ -57,20 +57,21 @@ dataset = dataset["train"].train_test_split(test_size=0.15, shuffle=True, seed=1
 train_dataset = dataset['train']
 val_dataset = dataset['test']
 
-# Preprocessing for the labels
-label_encoder = LabelEncoder()
+# Preprocessing for the labels -> Only necessary for oxford-pet, not mnist or stanford-dogs
+if args.dataset == "oxford-pet":
+    label_encoder = LabelEncoder()
 
-def label_preprocessing(dataset):
-    # Fit the encoder on the string labels and transform them to integer labels
-    label_encoder.fit(dataset[label_column_name])
-    encoded_labels = label_encoder.transform(dataset[label_column_name])
+    def label_preprocessing(dataset):
+        # Fit the encoder on the string labels and transform them to integer labels
+        label_encoder.fit(dataset[label_column_name])
+        encoded_labels = label_encoder.transform(dataset[label_column_name])
 
-    # Add the encoded labels as a new column in the dataset
-    return dataset.add_column('label', encoded_labels)
+        # Add the encoded labels as a new column in the dataset
+        return dataset.add_column('label', encoded_labels)
 
-# Apply preprocessing
-train_dataset = label_preprocessing(train_dataset)
-val_dataset = label_preprocessing(val_dataset)
+    # Apply preprocessing
+    train_dataset = label_preprocessing(train_dataset)
+    val_dataset = label_preprocessing(val_dataset)
 
 # Filter classes if specified
 if args.classes:
