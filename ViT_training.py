@@ -85,6 +85,21 @@ if args.classes:
 
     # Update num_classes to reflect the number of selected classes
     num_classes = len(selected_classes)
+
+    # Preprocessing for the labels -> Once filtered the labels need to be set between (0, num(classes)-1)
+    label_encoder = LabelEncoder()
+
+    def label_preprocessing(dataset):
+        # Fit the encoder only on the filtered labels
+        label_encoder.fit(selected_classes)
+        # Transform the dataset labels
+        dataset = dataset.map(lambda batch: {'label': label_encoder.transform([batch['label']])[0]})
+        return dataset
+
+    # Apply preprocessing
+    train_dataset = label_preprocessing(train_dataset)
+    val_dataset = label_preprocessing(val_dataset)
+
 else:
     selected_classes = [i for i in range(num_classes)]
 
