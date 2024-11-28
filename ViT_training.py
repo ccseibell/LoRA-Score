@@ -22,7 +22,7 @@ import pandas as pd
 import json
 
 # Importing the arg parser
-from utils import parse_args, gather_metrics
+from utils import parse_args, gather_metrics, perform_lora_svd
 
 # Set warnings to ignore to keep output clean
 warnings.filterwarnings('ignore')
@@ -155,16 +155,17 @@ def compute_metrics(eval_pred):
     predictions = logits.argmax(axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = "ViT"
+run_name = f"ViT-{args.dataset}"
 training_args = TrainingArguments(
     output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
     per_device_eval_batch_size=args.eval_batch_size,
+    label_names = ["labels"],
     gradient_accumulation_steps=args.gradient_accumulation_steps,
     max_steps=args.max_steps,
-    logging_steps=10,
-    eval_steps=10,
-    save_steps=10,
+    logging_steps=20,
+    eval_steps=20,
+    save_steps=20,
     save_total_limit=1,
     evaluation_strategy="steps"
 )
@@ -186,7 +187,23 @@ trainer.train()
 ######################
 
 if args.use_lora:
-    pass # TODO: Figure out how to store LoRA weights aggregated
+    # If LoRA, then extract the diagonal entries for singular value decomposition
+    svd_diagonal_entries = perform_lora_svd(model)
+    metrics = gather_metrics(trainer)
+
+    data = {
+        "Metrics": metrics,
+        "SVD Diagonal Entries": svd_diagonal_entries
+    }
+
+    with open("out/lora_training_results.json") as f:
+        curr_results = json.load(f)
+
+    run_name = "-".join([str(i) for i in sorted(selected_classes)])
+    curr_results[args.dataset][run_name] = data
+
+    with open("out/lora_training_results.json", "w") as f:
+        json.dump(curr_results, f)
 
 else:
     metrics = gather_metrics(trainer)

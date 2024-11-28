@@ -2,14 +2,24 @@
 
 # Define the Python script to run
 PYTHON_SCRIPT="ViT_training.py"
-DATASET="stanford-dogs"
+
+# Define dataset to be used
+DATASET_1="stanford-dogs"
+DATASET_2="oxford-pet"
+DATASET=$DATASET_2
+
+# Define number of classes combinations and total number of classes
+if [ "$DATASET" = "$DATASET_1" ]; then
+    classes_combo=(2 10 20 40 60 80 100)
+    TOTAL_CLASSES=120
+else
+    classes_combo=(2 5 10 15 20 25 30)
+    TOTAL_CLASSES=37
+fi
 
 # # Running script for all classes
 # echo "Running all classes"
 # python $PYTHON_SCRIPT --dataset $DATASET
-
-# Define the total number of classes in the dataset
-TOTAL_CLASSES=120
 
 # Function to generate a random combination of classes
 generate_random_classes() {
@@ -19,7 +29,7 @@ generate_random_classes() {
 
 # Loop through the desired combinations
 for i in {1..10}; do
-    for num_classes in 10 20 40 60 80 100; do
+    for num_classes in ${classes_combo[@]}; do
         # Generate random classes
         random_classes=$(generate_random_classes $num_classes)
         

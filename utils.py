@@ -1,5 +1,8 @@
 import argparse
 from matplotlib import pyplot as plt
+from tqdm import tqdm
+import torch
+import numpy as np
 
 # Argument Parser
 def parse_args():
@@ -30,14 +33,14 @@ def parse_args():
     parser.add_argument(
         "--lora_rank",
         type=int,
-        default=64,
-        help="Rank parameter for LoRA (default: 64)."
+        default=500,
+        help="Rank parameter for LoRA (default: 500)."
     )
     parser.add_argument(
         "--lora_alpha",
         type=int,
-        default=8,
-        help="Alpha parameter for LoRA (default: 8)."
+        default=500,
+        help="Alpha parameter for LoRA -> suggested to be equal to r(default: 500)."
     )
     parser.add_argument(
         "--lora_dropout",
@@ -74,6 +77,36 @@ def parse_args():
 
     return parser.parse_args()
 
+def perform_lora_svd(model):
+    """Extract singular values from LoRA weights across all layers."""
+    encoder_layers = model.base_model.model.vit.encoder.layer
+    num_layers = len(encoder_layers)
+    
+    svd_results = {}
+    
+    for layer_idx in tqdm(range(num_layers)):
+        attention = encoder_layers[layer_idx].attention.attention
+        lora_layers = {
+            'query': attention.query,
+            'key': attention.key,
+            'value': attention.value
+        }
+        
+        layer_svd = {}
+        for name, lora_layer in lora_layers.items():
+            # Combine LoRA A and B matrices
+            lora_A = lora_layer.lora_A['default'].weight
+            lora_B = lora_layer.lora_B['default'].weight
+            lora_weight = torch.mm(lora_B, lora_A)
+            
+            # Perform SVD
+            U, S, Vt = torch.svd(lora_weight.detach())
+            layer_svd[name] = S.cpu().numpy().tolist()
+        
+        svd_results[f'layer_{layer_idx}'] = layer_svd
+    
+    return svd_results
+
 def plot_metrics(data):
     """Given the dictionary of the results -> Plot the results"""
     # Create the figure and subplots
@@ -98,6 +131,66 @@ def plot_metrics(data):
 
     # Adjust layout and display
     plt.tight_layout()
+    return plt.show()
+
+def plot_lora_svd_singular_values(svd_results):
+    """
+    Plot singular values, with the x-axis as the index and y-axis as the value of the singular value.
+    One row per layer, columns for matrix types.
+    """
+    num_layers = len(svd_results)
+    matrix_types = ['query', 'key', 'value']
+    
+    # Create figure with one row per layer
+    fig, axes = plt.subplots(num_layers, 3, figsize=(15, 4*num_layers))
+    fig.suptitle('Singular Values in LoRA Weights', fontsize=16)
+    
+    for layer_idx, (layer_key, layer_data) in enumerate(svd_results.items()):
+        for matrix_idx, matrix_name in enumerate(matrix_types):
+            singular_values = layer_data[matrix_name]
+            
+            # Plot singular values
+            axes[layer_idx, matrix_idx].plot(range(len(singular_values)), singular_values, marker='o')
+            axes[layer_idx, matrix_idx].set_title(f'{layer_key} - {matrix_name} Matrix')
+            axes[layer_idx, matrix_idx].set_xlabel('Index')
+            axes[layer_idx, matrix_idx].set_ylabel('Singular Value')
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.98])
+    plt.show()
+
+def plot_histogram(data, bins=10, title='Distribution Histogram', xlabel='Value'):
+    """
+    Plot a histogram of floating-point values.
+    """
+    # Convert input to numpy array
+    data_array = np.array(data)
+    
+    # Create figure and axis
+    plt.figure(figsize=(8, 5))
+    
+    # Plot histogram
+    plt.hist(data_array, bins=bins, edgecolor="black")
+    
+    # Set labels and title
+    plt.title(title, fontsize=15)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel("Frequency", fontsize=12)
+    
+    # Add grid for better readability
+    plt.grid(linestyle='--')
+    
+    # Compute and display some basic statistics
+    plt.annotate(f'Mean: {np.mean(data_array):.2f}\n'
+                 f'Median: {np.median(data_array):.2f}\n'
+                 f'Std Dev: {np.std(data_array):.2f}', 
+                 xy=(0.95, 0.95), xycoords='axes fraction', 
+                 horizontalalignment='right', 
+                 verticalalignment='top',
+                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+    
+    # Adjust layout
+    plt.tight_layout()
+    
     return plt.show()
 
 def gather_metrics(trainer):
