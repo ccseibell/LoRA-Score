@@ -6,7 +6,7 @@ PYTHON_SCRIPT="ViT_training.py"
 # Define dataset to be used
 DATASET_1="stanford-dogs"
 DATASET_2="oxford-pet"
-DATASET=$DATASET_2
+DATASET=$DATASET_1
 
 # Define number of classes combinations and total number of classes
 if [ "$DATASET" = "$DATASET_1" ]; then
