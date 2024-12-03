@@ -16,12 +16,9 @@ def gini_coefficient(x):
     
     # Sort the array
     x = np.sort(x)
-    
-    # Calculate the cumulative sum and normalize
-    index = np.arange(1, len(x) + 1)
     n = len(x)
-    
-    return (np.sum((2 * index - n - 1) * x)) / (n * np.sum(x))
+        
+    return  1 - 2*np.sum(x)/n
 
 def energy_ratio_test_count(x, energy_threshold=0.95):
     """
@@ -44,22 +41,22 @@ def energy_ratio_test_count(x, energy_threshold=0.95):
     
     return count
 
-def elbow_method_count(x):
+def elbow_method_count(singular_values):
     """
-    Implements the Elbow Method and returns the count of floating point values up to the elbow point.
+    Implements the Elbow Method and returns the count of singular values up to the elbow point.
     
     Parameters:
-    - x (list or np.ndarray): List of floating point values.
+    - singular_values (list or np.ndarray): List of singular values.
     
     Returns:
     - count (int): Number of singular values up to the elbow point.
     """
-    x = np.array(x)
+    singular_values = np.array(singular_values)
     
     # Normalize the indices and values for better scaling
-    indices = np.arange(len(x))
+    indices = np.arange(len(singular_values))
     x = indices / indices.max()
-    y = x / x.max()
+    y = singular_values / singular_values.max()
     
     # Calculate the line from the first to the last point
     start = np.array([0, y[0]])
