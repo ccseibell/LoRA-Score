@@ -24,6 +24,22 @@ def parse_args():
         help="List of classes to train on (e.g., --classes 1 7 29)."
     )
 
+    # Whether to clamp size of dataset
+    parser.add_argument(
+        "--clamp_min_classes",
+        type=int,
+        default=None,
+        help="If clamping the size of the dataset, the minimum number of classes used in the training (default: None (no clamping))."
+    )
+
+    # Whether to shuffle the labels
+    parser.add_argument(
+        "--shuffle_label_ratio",
+        type=float,
+        default=0.,
+        help=" If you want to shuffle a portion of the labels in the test dataset, the ratio to do so(default: 0 (no shuffling))."
+    )
+
     # LoRA configuration
     parser.add_argument(
         "--use_lora",

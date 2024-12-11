@@ -9,12 +9,14 @@ from transformers import (
     TrainingArguments,
     Trainer,
 )
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
 import evaluate
 import numpy as np
 import warnings
+import random 
 import os
+from collections import Counter
 
 from PIL import Image
 from torchvision.transforms import Compose, Resize, ToTensor
@@ -51,6 +53,9 @@ elif args.dataset == "stanford-dogs":
 
 else:
     raise ValueError("Currently not supported -> You can add them now")
+
+# Setting the clamp on the size of the dataset
+min_num_classes = args.clamp_min_classes if args.clamp_min_classes else num_classes
 
 # Creating val/train split
 dataset = dataset["train"].train_test_split(test_size=0.15, shuffle=True, seed=1)
@@ -103,6 +108,40 @@ if args.classes:
 else:
     selected_classes = [i for i in range(num_classes)]
 
+# Clamping size of dataset
+def clamp_dataset(dataset, num_classes, min_num_classes):
+    # Count labels in the training and testing datasets
+    label_counts = Counter(dataset['label'])
+
+    sorted_counts = sorted(label_counts.values())
+    clamp_value = sum(sorted_counts[:min_num_classes])
+    
+    per_class_lim = clamp_value // num_classes
+
+    # Group samples by class
+    sample_by_class = {}
+    for sample in tqdm(dataset, desc="Clamping"):
+        cls = sample['label']
+        if cls not in sample_by_class:
+            sample_by_class[cls] = []
+
+        if len(sample_by_class[cls])<per_class_lim:
+            sample_by_class[cls].append(sample)
+
+    clamped_dataset = []
+    for samples in sample_by_class.values():
+        clamped_dataset += samples
+
+    # Convert back to a Dataset format
+    filtered_data = {
+        image_col_name: [sample[image_col_name] for sample in clamped_dataset],
+        'label': [sample['label'] for sample in clamped_dataset],
+    }
+    return Dataset.from_dict(filtered_data)
+
+# Clamping train_dataset
+train_dataset = clamp_dataset(train_dataset, num_classes, min_num_classes)
+
 # Preprocessing dataset to be compatible with ViT
 transform = Compose([
     Resize((224, 224)),
@@ -119,6 +158,40 @@ def preprocess_images(batch):
 # Apply resizing
 train_dataset = train_dataset.map(preprocess_images, batched=True)
 val_dataset = val_dataset.map(preprocess_images, batched=True)
+
+# To shuffle portion of labels
+def shuffle_labels(dataset, shuffle_fraction):
+    # Calculate the number of labels to shuffle
+    num_samples = len(dataset)
+    num_to_shuffle = int(num_samples * shuffle_fraction)
+    print(f"Shuffling {num_to_shuffle}/{num_samples} labels.")
+
+    if num_to_shuffle==0:
+        return dataset
+    
+    # Randomly select indices to shuffle
+    indices_to_shuffle = random.sample(range(num_samples), num_to_shuffle)
+
+    # Shuffle the selected labels
+    shuffled_labels = [dataset[i]['label'] for i in indices_to_shuffle]
+    random.shuffle(shuffled_labels)
+
+    shuffled_dataset = {'pixel_values': [], 'label': []}
+    for i, sample in tqdm(enumerate(dataset), desc="Shuffling"):
+        if i in indices_to_shuffle:
+            new_label = shuffled_labels.pop(0)
+            sample['label'] = new_label
+
+        shuffled_dataset['pixel_values'].append(sample['pixel_values'])
+        shuffled_dataset['label'].append(sample['label'])
+
+    return Dataset.from_dict(shuffled_dataset)
+
+# Shuffle 'em labels in train
+new_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
+
+# Printing info
+print(f"Length of dataset: {len(train_dataset)}")
 
 if args.use_lora:
     layers = ["query", "key", "value"]
@@ -186,6 +259,10 @@ trainer.train()
 ### Results Logger ###
 ######################
 
+run_name = "-".join([str(i) for i in sorted(selected_classes)])
+if args.shuffle_label_ratio > 0:
+    run_name = f"{args.shuffle_label_ratio}: {run_name}"
+
 if args.use_lora:
     # If LoRA, then extract the diagonal entries for singular value decomposition
     svd_diagonal_entries = perform_lora_svd(model)
@@ -196,13 +273,15 @@ if args.use_lora:
         "SVD Diagonal Entries": svd_diagonal_entries
     }
 
-    with open(f"out/lora_{args.dataset}_results.json") as f:
+    clamp_text = "_clamped" if args.clamp_min_classes else ""
+    shuffle_text = "_shuffled" if args.shuffle_label_ratio>0 else ""
+    file_name = f"lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
+    with open(file_name) as f:
         curr_results = json.load(f)
 
-    run_name = "-".join([str(i) for i in sorted(selected_classes)])
     curr_results[run_name] = data
 
-    with open("out/lora_training_results.json", "w") as f:
+    with open(file_name, "w") as f:
         json.dump(curr_results, f)
 
 else:
@@ -211,7 +290,6 @@ else:
     with open("out/base_metric_results.json") as f:
         curr_results = json.load(f)
 
-    run_name = "-".join([str(i) for i in sorted(selected_classes)])
     curr_results[args.dataset][run_name] = metrics
 
     with open("out/base_metric_results.json", "w") as f:
