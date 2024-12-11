@@ -196,11 +196,11 @@ if args.use_lora:
         "SVD Diagonal Entries": svd_diagonal_entries
     }
 
-    with open("out/lora_training_results.json") as f:
+    with open(f"out/lora_{args.dataset}_results.json") as f:
         curr_results = json.load(f)
 
     run_name = "-".join([str(i) for i in sorted(selected_classes)])
-    curr_results[args.dataset][run_name] = data
+    curr_results[run_name] = data
 
     with open("out/lora_training_results.json", "w") as f:
         json.dump(curr_results, f)
