@@ -142,23 +142,6 @@ def clamp_dataset(dataset, num_classes, min_num_classes):
 # Clamping train_dataset
 train_dataset = clamp_dataset(train_dataset, num_classes, min_num_classes)
 
-# Preprocessing dataset to be compatible with ViT
-transform = Compose([
-    Resize((224, 224)),
-    ToTensor()
-])
-
-# Combined function to resize, convert to RGB, and then to tensor
-def preprocess_images(batch):
-    batch['pixel_values'] = [transform(image.convert("RGB")) for image in batch[image_col_name]]
-    if image_col_name!='pixel_values':
-        del batch[image_col_name]
-    return batch
-
-# Apply resizing
-train_dataset = train_dataset.map(preprocess_images, batched=True)
-val_dataset = val_dataset.map(preprocess_images, batched=True)
-
 # To shuffle portion of labels
 def shuffle_labels(dataset, shuffle_fraction):
     # Calculate the number of labels to shuffle
@@ -176,19 +159,36 @@ def shuffle_labels(dataset, shuffle_fraction):
     shuffled_labels = [dataset[i]['label'] for i in indices_to_shuffle]
     random.shuffle(shuffled_labels)
 
-    shuffled_dataset = {'pixel_values': [], 'label': []}
+    shuffled_dataset = {image_col_name: [], 'label': []}
     for i, sample in tqdm(enumerate(dataset), desc="Shuffling"):
         if i in indices_to_shuffle:
             new_label = shuffled_labels.pop(0)
             sample['label'] = new_label
 
-        shuffled_dataset['pixel_values'].append(sample['pixel_values'])
+        shuffled_dataset[image_col_name].append(sample[image_col_name])
         shuffled_dataset['label'].append(sample['label'])
 
     return Dataset.from_dict(shuffled_dataset)
 
 # Shuffle 'em labels in train
 new_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
+
+# Preprocessing dataset to be compatible with ViT
+transform = Compose([
+    Resize((224, 224)),
+    ToTensor()
+])
+
+# Combined function to resize, convert to RGB, and then to tensor
+def preprocess_images(batch):
+    batch['pixel_values'] = [transform(image.convert("RGB")) for image in batch[image_col_name]]
+    if image_col_name!='pixel_values':
+        del batch[image_col_name]
+    return batch
+
+# Apply resizing
+train_dataset = train_dataset.map(preprocess_images, batched=True)
+val_dataset = val_dataset.map(preprocess_images, batched=True)
 
 # Printing info
 print(f"Length of dataset: {len(train_dataset)}")
@@ -275,7 +275,7 @@ if args.use_lora:
 
     clamp_text = "_clamped" if args.clamp_min_classes else ""
     shuffle_text = "_shuffled" if args.shuffle_label_ratio>0 else ""
-    file_name = f"lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
+    file_name = f"out/lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
     with open(file_name) as f:
         curr_results = json.load(f)
 
