@@ -125,8 +125,9 @@ def clamp_dataset(dataset, num_classes, clamp_value):
     }
     return Dataset.from_dict(filtered_data)
 
-# Clamping train_dataset
-train_dataset = clamp_dataset(train_dataset, num_classes, clamp_value)
+if args.classes:
+    # Clamping train_dataset
+    train_dataset = clamp_dataset(train_dataset, num_classes, clamp_value)
 
 # To shuffle portion of labels
 def shuffle_labels(dataset, shuffle_fraction):
