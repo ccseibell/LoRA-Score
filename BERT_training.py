@@ -26,8 +26,8 @@ warnings.filterwarnings('ignore')
 args = parse_args()
 
 # Dataset selection
-if args.dataset_type == "arxiv":
-    dataset = load_dataset("csv", data_files="arxiv_filtered.csv")
+if args.dataset == "arxiv":
+    dataset = load_dataset("csv", data_files="data/arxiv_filtered.csv")
     num_classes = 10
     label_column_name = "categories"
     text_column_name = "abstract"
@@ -42,7 +42,7 @@ train_dataset = dataset['train']
 val_dataset = dataset['test']
 
 # Preprocessing for the labels -> Only necessary for oxford-pet and arxiv, not mnist or stanford-dogs
-if args.dataset_type == "arxiv":
+if args.dataset == "arxiv":
     label_encoder = LabelEncoder()
 
     def label_preprocessing(dataset):
@@ -205,7 +205,7 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(logits, axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = f"BERT-{args.dataset_type}"
+run_name = f"BERT-{args.dataset}"
 training_args = TrainingArguments(
     output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
