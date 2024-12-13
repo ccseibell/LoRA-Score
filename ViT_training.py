@@ -32,6 +32,9 @@ warnings.filterwarnings('ignore')
 # Parse the arguments
 args = parse_args()
 
+# Printing arg info
+print(f"Training on {args.dataset} with clamping: {args.clamp_min_classes} and shuffling: {args.shuffle_label_ratio}")
+
 # Dataset selection
 if args.dataset == "mnist":
     dataset = load_dataset("mnist")
@@ -78,6 +81,17 @@ if args.dataset == "oxford-pet":
     train_dataset = label_preprocessing(train_dataset)
     val_dataset = label_preprocessing(val_dataset)
 
+# Obtain clamp value for later
+def get_clamp_values(dataset, min_num_classes):
+    # Count labels in the training and testing datasets
+    label_counts = Counter(dataset['label'])
+
+    sorted_counts = sorted(label_counts.values())
+    return sum(sorted_counts[:min_num_classes])
+
+clamp_value = get_clamp_values(train_dataset, min_num_classes)
+print(f"Clamp values: {clamp_value}")
+
 # Filter classes if specified
 if args.classes:
     selected_classes = args.classes
@@ -109,13 +123,8 @@ else:
     selected_classes = [i for i in range(num_classes)]
 
 # Clamping size of dataset
-def clamp_dataset(dataset, num_classes, min_num_classes):
-    # Count labels in the training and testing datasets
-    label_counts = Counter(dataset['label'])
-
-    sorted_counts = sorted(label_counts.values())
-    clamp_value = sum(sorted_counts[:min_num_classes])
-    
+def clamp_dataset(dataset, num_classes, clamp_value):
+    # Min number of samples per class    
     per_class_lim = clamp_value // num_classes
 
     # Group samples by class
@@ -139,8 +148,9 @@ def clamp_dataset(dataset, num_classes, min_num_classes):
     }
     return Dataset.from_dict(filtered_data)
 
-# Clamping train_dataset
-train_dataset = clamp_dataset(train_dataset, num_classes, min_num_classes)
+# Clamping train_dataset if needed
+if args.classes:
+    train_dataset = clamp_dataset(train_dataset, num_classes, clamp_value)
 
 # To shuffle portion of labels
 def shuffle_labels(dataset, shuffle_fraction):
@@ -171,7 +181,7 @@ def shuffle_labels(dataset, shuffle_fraction):
     return Dataset.from_dict(shuffled_dataset)
 
 # Shuffle 'em labels in train
-new_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
+train_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
 
 # Preprocessing dataset to be compatible with ViT
 transform = Compose([
@@ -228,7 +238,7 @@ def compute_metrics(eval_pred):
     predictions = logits.argmax(axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = f"ViT-{args.dataset}"
+run_name = f"ViT-{args.dataset}-{args.shuffle_label_ratio}"
 training_args = TrainingArguments(
     output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
