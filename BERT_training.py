@@ -15,6 +15,7 @@ import warnings
 import random
 import os
 import json
+from collections import Counter
 
 # Importing the arg parser
 from BERT_utils import parse_args, gather_metrics, perform_lora_svd
@@ -27,7 +28,7 @@ args = parse_args()
 # Dataset selection
 if args.dataset_type == "arxiv":
     dataset = load_dataset("csv", data_files="arxiv_filtered.csv")
-    num_classes = 140
+    num_classes = 10
     label_column_name = "categories"
     text_column_name = "abstract"
 else:
@@ -40,7 +41,7 @@ dataset = dataset['train'].train_test_split(test_size=0.15, shuffle=True, seed=1
 train_dataset = dataset['train']
 val_dataset = dataset['test']
 
-# Preprocessing for the labels -> Only necessary for oxford-pet, not mnist or stanford-dogs
+# Preprocessing for the labels -> Only necessary for oxford-pet and arxiv, not mnist or stanford-dogs
 if args.dataset_type == "arxiv":
     label_encoder = LabelEncoder()
 
@@ -55,6 +56,17 @@ if args.dataset_type == "arxiv":
     # Apply preprocessing
     train_dataset = label_preprocessing(train_dataset)
     val_dataset = label_preprocessing(val_dataset)
+
+def get_clamp_values(dataset, min_num_classes):
+    label_counts = Counter(dataset['label'])
+
+    sorted_counts = sorted(label_counts.values())
+    clamp_value = sum(sorted_counts[:min_num_classes])
+    return clamp_value
+
+clamp_value = get_clamp_values(train_dataset, min_num_classes)
+print(f"Clamp value: {clamp_value}")
+
 
 # Filter classes if specified
 if args.classes:
@@ -87,13 +99,8 @@ else:
     selected_classes = [i for i in range(num_classes)]
 
 # Clamping size of dataset
-def clamp_dataset(dataset, num_classes, min_num_classes):
+def clamp_dataset(dataset, num_classes, clamp_value):
     # Count labels in the training and testing datasets
-    label_counts = Counter(dataset['label'])
-
-    sorted_counts = sorted(label_counts.values())
-    clamp_value = sum(sorted_counts[:min_num_classes])
-    
     per_class_lim = clamp_value // num_classes
 
     # Group samples by class
@@ -110,15 +117,16 @@ def clamp_dataset(dataset, num_classes, min_num_classes):
     for samples in sample_by_class.values():
         clamped_dataset += samples
 
+
     # Convert back to a Dataset format
     filtered_data = {
-        image_col_name: [sample[image_col_name] for sample in clamped_dataset],
+        text_column_name: [sample[text_column_name] for sample in clamped_dataset],
         'label': [sample['label'] for sample in clamped_dataset],
     }
     return Dataset.from_dict(filtered_data)
 
 # Clamping train_dataset
-train_dataset = clamp_dataset(train_dataset, num_classes, min_num_classes)
+train_dataset = clamp_dataset(train_dataset, num_classes, clamp_value)
 
 # To shuffle portion of labels
 def shuffle_labels(dataset, shuffle_fraction):
@@ -149,7 +157,7 @@ def shuffle_labels(dataset, shuffle_fraction):
     return Dataset.from_dict(shuffled_dataset)
 
 # Shuffle 'em labels in train
-new_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
+train_dataset = shuffle_labels(train_dataset, args.shuffle_label_ratio)
 
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
@@ -168,10 +176,11 @@ val_dataset = val_dataset.map(tokenize_function, batched=True)
 
 # Printing info
 print(f"Length of dataset: {len(train_dataset)}")
+print(f"Length of validation dataset: {len(val_dataset)}")
 
 model = AutoModelForSequenceClassification.from_pretrained(
     "bert-base-uncased",
-    num_labels=len(train_dataset.unique(label_column_name))
+    num_labels=len(train_dataset.unique('label'))
 )
 
 # Apply LoRA
@@ -196,27 +205,27 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(logits, axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = f"BERT-{args.dataset}"
+run_name = f"BERT-{args.dataset_type}"
 training_args = TrainingArguments(
     output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
     per_device_eval_batch_size=args.eval_batch_size,
-    label_names = ["labels"],
+    # label_names = ['categories'],
     gradient_accumulation_steps=args.gradient_accumulation_steps,
     max_steps=args.max_steps,
     logging_steps=20,
     eval_steps=20,
     save_steps=20,
     save_total_limit=1,
-    evaluation_strategy="steps"
+    evaluation_strategy="steps",
 )
 
-# Initialize Trainer
+# Trainer setup
 trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_dataset,
-    eval_dataset=val_dataset,
+    eval_dataset=val_dataset.select(range(int(len(train_dataset) * .25))),
     compute_metrics=compute_metrics,
 )
 
@@ -243,7 +252,7 @@ if args.use_lora:
 
     clamp_text = "_clamped" if args.clamp_min_classes else ""
     shuffle_text = "_shuffled" if args.shuffle_label_ratio>0 else ""
-    file_name = f"out/lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
+    file_name = f"out/text/lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
     with open(file_name) as f:
         curr_results = json.load(f)
 
@@ -255,10 +264,10 @@ if args.use_lora:
 else:
     metrics = gather_metrics(trainer)
 
-    with open("out/base_metric_results.json") as f:
+    with open("out/text/base_metric_results.json") as f:
         curr_results = json.load(f)
 
     curr_results[args.dataset][run_name] = metrics
 
-    with open("out/base_metric_results.json", "w") as f:
+    with open("out/text/base_metric_results.json", "w") as f:
         json.dump(curr_results, f)
