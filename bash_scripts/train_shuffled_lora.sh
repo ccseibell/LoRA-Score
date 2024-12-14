@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Loop through the desired combinations
-for shuffle_proportion in 0.05 0.1 0.15 0.2 0.3 0.4 0.5; do
+for shuffle_proportion in 0.05 0.1 0.15 0.2 0.3 0.5 0.7 0.8 0.9 1; do
     echo "Shuffling $shuffle_proportion of dataset"
 
     # Run the Python scripts

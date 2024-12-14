@@ -200,8 +200,13 @@ def preprocess_images(batch):
 train_dataset = train_dataset.map(preprocess_images, batched=True)
 val_dataset = val_dataset.map(preprocess_images, batched=True)
 
+# Decrease size of val dataset
+new_size = min(int(len(train_dataset) * .1), len(val_dataset))
+val_dataset = val_dataset.select(range(new_size))
+
 # Printing info
-print(f"Length of dataset: {len(train_dataset)}")
+print(f"Length of train dataset: {len(train_dataset)}")
+print(f"Length of val dataset: {len(val_dataset)}")
 
 if args.use_lora:
     layers = ["query", "key", "value"]
