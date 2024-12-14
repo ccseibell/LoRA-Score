@@ -18,7 +18,8 @@ import json
 from collections import Counter
 
 # Importing the arg parser
-from BERT_utils import parse_args, gather_metrics, perform_lora_svd
+from utils import gather_metrics
+from BERT_utils import parse_args, perform_lora_svd
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -28,13 +29,14 @@ args = parse_args()
 # Dataset selection
 if args.dataset == "arxiv":
     dataset = load_dataset("csv", data_files="data/arxiv_filtered.csv")
-    num_classes = 10
+    num_classes = 140
     label_column_name = "categories"
     text_column_name = "abstract"
 else:
     raise ValueError("Currently not supported")
 
-min_num_classes = 10
+# Setting the clamp on the size of the dataset
+min_num_classes = args.clamp_min_classes if args.clamp_min_classes else num_classes
 
 # Creating val/train split
 dataset = dataset['train'].train_test_split(test_size=0.15, shuffle=True, seed=1)
@@ -146,13 +148,13 @@ def shuffle_labels(dataset, shuffle_fraction):
     shuffled_labels = [dataset[i]['label'] for i in indices_to_shuffle]
     random.shuffle(shuffled_labels)
 
-    shuffled_dataset = {image_col_name: [], 'label': []}
+    shuffled_dataset = {text_column_name: [], 'label': []}
     for i, sample in tqdm(enumerate(dataset), desc="Shuffling"):
         if i in indices_to_shuffle:
             new_label = shuffled_labels.pop(0)
             sample['label'] = new_label
 
-        shuffled_dataset[image_col_name].append(sample[image_col_name])
+        shuffled_dataset[text_column_name].append(sample[text_column_name])
         shuffled_dataset['label'].append(sample['label'])
 
     return Dataset.from_dict(shuffled_dataset)
@@ -206,7 +208,7 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(logits, axis=-1)
     return accuracy.compute(predictions=predictions, references=labels)
 
-run_name = f"BERT-{args.dataset}"
+run_name = f"BERT-{args.dataset}-{args.shuffle_label_ratio}"
 training_args = TrainingArguments(
     output_dir=f"results/{run_name}",
     per_device_train_batch_size=args.batch_size,
@@ -253,7 +255,7 @@ if args.use_lora:
 
     clamp_text = "_clamped" if args.clamp_min_classes else ""
     shuffle_text = "_shuffled" if args.shuffle_label_ratio>0 else ""
-    file_name = f"out/text/lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
+    file_name = f"out/text/{args.dataset}/lora{clamp_text}{shuffle_text}_results.json"
     with open(file_name) as f:
         curr_results = json.load(f)
 
@@ -265,10 +267,10 @@ if args.use_lora:
 else:
     metrics = gather_metrics(trainer)
 
-    with open("out/text/base_metric_results.json") as f:
+    with open("out/text/fine-tune_metric_results.json") as f:
         curr_results = json.load(f)
 
     curr_results[args.dataset][run_name] = metrics
 
-    with open("out/text/base_metric_results.json", "w") as f:
+    with open("out/text/fine-tune_metric_results.json", "w") as f:
         json.dump(curr_results, f)

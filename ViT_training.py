@@ -285,7 +285,7 @@ if args.use_lora:
 
     clamp_text = "_clamped" if args.clamp_min_classes else ""
     shuffle_text = "_shuffled" if args.shuffle_label_ratio>0 else ""
-    file_name = f"out/lora_{args.dataset}{clamp_text}{shuffle_text}_results.json"
+    file_name = f"out/vision/{args.dataset}/lora{clamp_text}{shuffle_text}_results.json"
     with open(file_name) as f:
         curr_results = json.load(f)
 
@@ -297,10 +297,10 @@ if args.use_lora:
 else:
     metrics = gather_metrics(trainer)
 
-    with open("out/base_metric_results.json") as f:
+    with open("out/vision/fine-tune_metric_results.json") as f:
         curr_results = json.load(f)
 
     curr_results[args.dataset][run_name] = metrics
 
-    with open("out/base_metric_results.json", "w") as f:
+    with open("out/vision/fine-tune_metric_results.json", "w") as f:
         json.dump(curr_results, f)
