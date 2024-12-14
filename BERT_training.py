@@ -177,6 +177,10 @@ def tokenize_function(batch):
 train_dataset = train_dataset.map(tokenize_function, batched=True)
 val_dataset = val_dataset.map(tokenize_function, batched=True)
 
+# Decrease size of val dataset
+new_size = min(int(len(train_dataset) * .1), len(val_dataset))
+val_dataset = val_dataset.select(range(new_size))
+
 # Printing info
 print(f"Length of dataset: {len(train_dataset)}")
 print(f"Length of validation dataset: {len(val_dataset)}")
@@ -228,7 +232,7 @@ trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_dataset,
-    eval_dataset=val_dataset.select(range(int(len(train_dataset) * .25))),
+    eval_dataset= val_dataset,
     compute_metrics=compute_metrics,
 )
 
